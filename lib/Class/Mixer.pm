@@ -2,7 +2,7 @@ package Class::Mixer;
 use strict;
 use Class::C3;
 use base;
-our $VERSION = '0.5';
+our $VERSION = '0.51';
 
 sub new
 {
@@ -94,8 +94,9 @@ sub remix_require
 	no strict 'refs';
 	my $base = shift;
 
-        if (base::has_version($base)) {
-            ${$base.'::VERSION'} = '-1, set by base.pm'
+	my $vglob = ${$base.'::'}{VERSION};
+	if ($vglob && *$vglob{SCALAR}) {
+            ${$base.'::VERSION'} = '-1, set by Class::Mixer'
               unless defined ${$base.'::VERSION'};
         } else {
             local $SIG{__DIE__};
@@ -111,7 +112,7 @@ Base class package "$base" is empty.
 ERROR
 
             }
-            ${$base.'::VERSION'} = "-1, set by base.pm"
+            ${$base.'::VERSION'} = "-1, set by Class::Mixer"
               unless defined ${$base.'::VERSION'};
         }
 }
