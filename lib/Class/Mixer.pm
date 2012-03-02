@@ -2,7 +2,7 @@ package Class::Mixer;
 use strict;
 use Class::C3;
 use base;
-our $VERSION = '0.51';
+our $VERSION = '0.52';
 
 sub new
 {
@@ -300,11 +300,12 @@ Class::Mixer - Arrange class hierarchy based on dependency rules
 =head1 DESCRIPTION
 
 This module is designed to solve a problem which occurs when using inheritance
-to mixin behaviors into a class hierarchy.  The dependencies between a large
-number of mixin modules may be complex, making it tricky to get the base 
-classes to inherit in the right order.  
+to mixin behaviors into a class hierarchy.  The dependencies between a 
+number of mixin modules may be complex. When different components wrap the same
+behavior, they often need to be in a specific order in the call chain, 
+making it tricky to get the base classes to inherit in the right order.  
 
-Then if you have class Main which gets the inheritance right, and you want
+Then if you have a class Main which gets the inheritance right, and you want
 to add a class Mixin which needs to go in the middle of the 
 inheritance, you cannot simply do C<package NewMain; use base qw(Main Mixin);>
 because Mixin will be put at the end of the inheritance chain.
@@ -314,11 +315,34 @@ the same problem occurs trying to mixin Foo::Better.  And it is even worse
 if some classes have done C<use base 'Foo';> to try to enforce the correct
 hierarchy.
 
-This module solves the problems by implementing a dependency-based hierarchy.
+This module solves these problems by implementing a dependency-based hierarchy.
 You declare the relations between the classes, and an order of inheritance
 which will support those relations is determined automatically.
 
-It combines functions from base and Class::C3 to do its job.
+For example, if you have a Logging component and an Authentication component,
+the Logging needs to be called first, because if Authentication fails, it will
+never be called at all.  In the Logging class, one can declare the Mixer rule
+C<< before=>'Authentication', optional=>'Authentication' >>, so that if Authentication
+is in the class hierarchy, Logging will be placed before it, but it will not
+complain if it is not there.  Alternatively, one could place the rule
+C<< after=>'Logging' >> in the Authentication class to achieve the same result.
+
+Logging could also be an abstract base class, and any class which declares
+C<< isa=>'Logging' >> will be kept together with Logging in the inheritance chain.
+This allows rules to refer to behavior classes without needing to know
+exactly which behavior class will actually be used.
+
+In my own usage, in a structured wiki project, less essential classes usually
+declare their rules in relation to more essential classes, such as Storage
+and IO.  So for example, the Security class declares C<< before=>'Storage' >>
+because it must be invoked before records are stored or retrieved, and also
+C<< requires=>'Session' >> because it needs a session but does not share any
+behavior methods with it.  Session declares C<< after=>'IO' >> because it needs IO
+to process cookies and arguments before it can work.  The Index and Revision
+classes both declare C<< before=>'Storage' >> but they do not care which of them
+runs first.
+
+Class::Mixer combines functions from base and Class::C3 to do its job.
 It will C<require> the given classes (unless optional) similar to C<use base>.
 And it attempts to force c3 semantices, so you should
 do C<< $self->method::next >> instead of C<SUPER> for inheritance.
@@ -350,10 +374,10 @@ class in the method dispatch order, which means that if they both define
 the same method, this class will be invoked before the other.
 In the inheritance hierarchy, this class should be a descendant of the other.
 
-This is essentially the same as what you would get if you did C<use base>
-instead.  Which you can, by the way.
+This is exactly the same as what you would get if you did C<use base>
+instead.  Which you can, and Class::Mixer will notice and use it.
 
-If no rule type is given, e.g. C<use Class::Mixer 'BaseClass';>
+If no rule type is given (e.g. C<use Class::Mixer 'BaseClass';> )
 then the before rule is assumed.
 
 =head2 B<after>
@@ -391,15 +415,6 @@ the class not complain if the other class is not there.
 This is useful when we want to say, "I do not really need this other class,
 but IF someone else does, I should be before (or after) the other class."
 
-=head1 BUGS and TODO
-
-Probably.
-
-"optional" isn't fully implemented yet.
-
-TODO?: implement a 'nota' rule, to prevent someone from putting this
-class in the same hierarchy as another.
-
 =head1 Why not Traits?
 
 Traits are complementary to inheritance, and do not address situations where
@@ -424,9 +439,42 @@ contraints to allow ordering the behaviors relative to each other, so
 even if I setup an event model, I would still need the solution which
 Class::Mixer provides.
 
+=head1 Comparison with Class::C3::Componentised
+
+Class::C3::Componentised is used in DBIx::Class similarly to Class::Mixer
+to implement the same sorts of mixin behaviors.  The difference is 
+exemplified by this quote from DBIx::Class::Component, 
+
+"The order in which is you load the components may be very important, 
+depending on the component. If you are not sure, then read the docs 
+for the components you are using and see if they mention anything about 
+the order in which you should load them."
+
+With Class::Mixer, the user never has to deal with the complexities of
+component order.  Component ordering requirements are both documented
+and *enforced* by the inheritance rules in each component.  So when
+building his application class, he can list the desired component modules 
+in any order, and let Class::Mixer put them in a correctly functioning order.
+
+On the other hand, Class::Mixer has no way to override the
+rules in the subclasses, so if the user decided he really wanted 
+Authentication to happen before Logging, he would have to change the
+rules in the subclasses in order to make that happen.
+
+=head1 BUGS and TODO
+
+Probably.
+
+"optional" isn't fully implemented yet.
+
+TODO?: implement a 'nota' rule, to prevent someone from putting this
+class in the same hierarchy as another.
+
 =head1 SEE ALSO
 
 L<Class::C3>
+
+L<Class::C3::Componentised>
 
 L<base>
 
@@ -435,6 +483,8 @@ The snide comments in L<mixin> probably apply to this module as well.
 =head1 AUTHOR
 
 John Williams, E<lt>smailliw@gmail.comE<gt>
+
+Thanks to Matt S Trout for help clarifying the documentation.
 
 =head1 COPYRIGHT AND LICENCE
 
